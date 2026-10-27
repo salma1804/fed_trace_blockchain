@@ -1,3 +1,5 @@
+# // taml hach lel les pods de chaque round w  bad taml hash lel serveur agrégé
+
 import hashlib
 import json
 import numpy as np

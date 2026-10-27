@@ -1,0 +1,35 @@
+# Environnement Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets et données locales : ne jamais partager
+.env
+*.env
+*.key
+offchain/
+cliniques/
+
+# Fichiers générés par les exécutions
+*.jsonl
+*.tmp
+*.bak
+history.json
+validation_log.txt
+mesures.json
+mesures_configurations.csv
+
+# Hardhat (le dossier chain/ a aussi son propre .gitignore)
+chain/node_modules/
+chain/artifacts/
+chain/cache/
+chain/types/
+
+# Fichiers locaux
+gensis
+tafsir.txt
+sauvegarde_contrat/
+chain/.agents/
+chain/.claude/
+chain/AGENTS.md
+chain/CLAUDE.md

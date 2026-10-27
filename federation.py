@@ -1,3 +1,4 @@
+# [federation.py : local_train kol clinique mch idawar fl local w yatinikn les weight finale bad namlo lagéregation msh nwn3 serveur global f kol round 
 import json
 import numpy as np
 from model import SoftmaxRegression, load_dataset

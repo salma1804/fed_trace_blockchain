@@ -1,0 +1,351 @@
+==============================================================
+  FEDTRACE EXPLIQUE SIMPLEMENT
+  (meme un enfant de 5 ans peut comprendre)
+==============================================================
+
+Ce document explique le projet avec des histoires de cuisine et de
+cahier magique. Il suit exactement ce qu'on a construit, fichier par
+fichier. A la fin, il y a un petit dictionnaire.
+
+Attention : c'est un projet d'ecole (un prototype). Il ne sert pas a
+soigner de vrais patients.
+
+
+--------------------------------------------------------------
+1. L'HISTOIRE EN UNE PHRASE
+--------------------------------------------------------------
+
+Trois cliniques apprennent ensemble a reconnaitre une maladie sans
+jamais se montrer leurs patients, et un cahier magique garde la preuve
+de qui a fait quoi, pour que personne ne puisse tricher.
+
+
+--------------------------------------------------------------
+2. LE PROBLEME (avec une histoire de gateau)
+--------------------------------------------------------------
+
+Imagine 3 cuisiniers dans 3 villes differentes. Chacun veut inventer
+la meilleure recette de gateau.
+
+  - Chacun a ses propres clients et ses ingredients secrets.
+  - Ils n'ont PAS le droit de se montrer leurs clients.
+
+Alors voici leur idee :
+
+  1. Chaque cuisinier essaie la recette chez lui, avec SES clients.
+  2. Il ameliore un peu la recette.
+  3. Il envoie seulement la recette amelioree (pas les clients).
+  4. Un chef melange les 3 recettes en une seule, meilleure.
+  5. Ils recommencent plusieurs fois.
+
+C'est ca, l'APPRENTISSAGE FEDERE.
+
+  Cuisinier  = une clinique
+  Clients    = les patients (ils ne quittent jamais la clinique)
+  Recette    = le modele (une liste de 21 nombres, appeles "poids")
+  Chef       = le serveur qui fait la moyenne
+
+MAIS il reste un probleme : plus tard, comment prouver qui a envoye
+quelle recette ? Et que la recette utilisee pour un diagnostic est
+bien celle qui est sortie du travail des 3 cliniques ? Sans preuve,
+un tricheur pourrait mentir.
+
+C'est la que le cahier magique (la blockchain) arrive.
+
+
+--------------------------------------------------------------
+3. LES PERSONNAGES DE L'HISTOIRE
+--------------------------------------------------------------
+
+LE CODE-BARRES MAGIQUE (le hash, ou "empreinte")
+  Une recette donne toujours le meme code-barres. Si on change UNE
+  seule virgule dans la recette, le code-barres devient completement
+  different. On ne peut pas retrouver la recette a partir du code.
+  Exemple : 4ffe23e3b58a... (en vrai : 64 caracteres)
+
+LE CAHIER MAGIQUE (le registre, ou "blockchain")
+  Un grand cahier avec des pages numerotees. Chaque page contient le
+  code-barres de la page d'avant, comme si les pages etaient collees
+  ensemble. Regles :
+    - on peut seulement ECRIRE A LA FIN ;
+    - on ne peut pas effacer ni changer une ancienne page ;
+    - si quelqu'un arrache ou reecrit une page, la colle se casse
+      et on le voit tout de suite.
+
+LE VIDEUR (la porte de certification, etape 10, pas encore faite)
+  Avant chaque diagnostic, il regarde le code-barres de la recette
+  utilisee. S'il n'est pas dans le cahier, il dit NON.
+
+LE COFFRE A COTE (le stockage hors chaine)
+  Les vraies recettes et les explications sont rangees dans un
+  dossier a part (offchain/). Dans le cahier, on ne met que les
+  codes-barres. Pourquoi ? Pour ne jamais ecrire d'information
+  medicale dans un cahier qu'on ne peut pas effacer.
+
+
+--------------------------------------------------------------
+4. LES 3 CLASSES DE DIAGNOSTIC (que le modele devine)
+--------------------------------------------------------------
+
+Pour chaque patient, le modele regarde 6 informations :
+
+  Age        : l'age de la personne
+  Gender     : femme (0) ou homme (1)
+  RF         : une prise de sang (le "facteur rhumatoide")
+  Anti_CCP   : une autre prise de sang (des anticorps)
+  CRP        : une prise de sang qui montre s'il y a de
+               l'inflammation (le corps "chauffe")
+  ESR        : une autre mesure de l'inflammation
+
+Puis il choisit UNE des 3 classes :
+
+  Classe 0 = SAIN
+    La personne n'a pas la maladie.
+
+  Classe 1 = POLYARTHRITE RHUMATOIDE SEROPOSITIVE
+    Maladie des articulations ; les prises de sang RF et/ou
+    Anti_CCP sont positives ("sero" = sang).
+
+  Classe 2 = POLYARTHRITE RHUMATOIDE SERONEGATIVE
+    Meme maladie des articulations, mais RF et Anti_CCP ne sont
+    pas positives.
+
+Exemple : un patient a un Anti_CCP tres eleve et un RF eleve. Le
+modele calcule 3 scores, un par classe, et donne par exemple :
+
+  Sain 2%   |   Seropositive 95%   |   Seronegative 3%
+
+Il choisit la plus grande : "Seropositive".
+
+
+--------------------------------------------------------------
+5. LES ETAPES, UNE PAR UNE (avec nos vrais chiffres)
+--------------------------------------------------------------
+
+ETAPE 1 - Partager les patients en 3 cliniques  [split_cliniques.py]
+  On prend 2658 patients d'entrainement et on fait 3 paquets :
+  886 patients pour la clinique 1, 886 pour la 2, 886 pour la 3.
+  On fait attention que chaque paquet ait la meme proportion de
+  sains, seropositifs et seronegatifs (c'est le mot "stratifie").
+  Les fichiers "validation" et "test" (570 patients chacun)
+  restent a part : ils servent a noter le modele, comme un examen.
+
+ETAPE 2 - Fabriquer le modele  [model.py]
+  Le modele est comme une balance avec 21 reglages (les poids).
+  On ne peut pas calculer avec des cases vides, alors on remplace
+  une valeur manquante par la valeur "du milieu" (la mediane).
+  Exemple : Anti_CCP manquait pour 118 patients ; on a mis la
+  valeur du milieu a la place. (Au debut, ces cases vides avaient
+  tout casse : le modele donnait 13% de bonnes reponses. Apres
+  correction : 92%.)
+
+ETAPE 3 - Entrainement local  [federation.py : local_train]
+  Chaque clinique recoit la meme recette de depart, s'entraine sur
+  ses 886 patients, et renvoie sa nouvelle recette.
+
+ETAPE 4 - Agregation  [federation.py : aggregate_weighted]
+  Le chef fait la moyenne des 3 recettes. Une clinique avec plus de
+  patients compte plus ("moyenne ponderee").
+  Exemple avec UN seul reglage :
+    clinique 1 trouve 0,40 (100 patients)
+    clinique 2 trouve 0,50 (100 patients)
+    clinique 3 trouve 0,60 (200 patients)
+    moyenne = (100x0,40 + 100x0,50 + 200x0,60) / 400 = 0,525
+
+ETAPE 5 - Repeter 10 fois  [federation.py : run_federation]
+  La recette du chef devient la recette de depart du tour suivant.
+  A chaque "round", le modele s'ameliore un peu. On note a chaque
+  fois sa note a l'examen (validation).
+
+ETAPE 6 - Le code-barres des recettes  [fingerprint.py]
+  On transforme les 21 nombres en un code SHA-256. Pour que le code
+  soit toujours le meme, on ecrit les nombres toujours de la meme
+  facon (c'est la "canonicalisation"). On a verifie que :
+    - memes nombres = meme code ;
+    - un tout petit changement = code different ;
+    - deux entrainements identiques = meme code (determinisme).
+
+ETAPE 7 - Le cahier magique  [ledger.py]
+  Une liste de blocs ("pages"). Chaque bloc contient : son numero,
+  l'heure, le code du bloc d'avant, son type, son contenu, et son
+  propre code. Le cahier est sauve dans le fichier ledger.jsonl.
+  Si on arrete le programme et qu'on le relance, il relit le fichier
+  et n'a rien perdu.
+
+ETAPE 8 - Ecrire dans le cahier  [anchored_federation.py]
+  A chaque round, dans CET ordre :
+    1. les 3 cliniques s'entrainent ;
+    2. on ecrit dans le cahier le code-barres de chaque
+       contribution (AVANT le melange) ;
+    3. le chef fait la moyenne ;
+    4. on ecrit le code-barres du modele global, sa note et sa
+       "maman" (le modele du round d'avant).
+  Pourquoi AVANT le melange ? Si une clinique envoie une mauvaise
+  recette, elle ne pourra plus dire "ce n'est pas moi" : son code
+  est deja ecrit.
+  Resultat : 1 page de depart + 1 modele initial + 10 rounds x
+  4 pages = 42 pages.
+
+ETAPE 9 - Le diagnostic  [diagnosis.py]
+  On donne un patient au modele. Il repond (par exemple
+  "Seropositive, 95%") et il ECRIT UNE EXPLICATION en francais :
+  les 3 informations qui ont le plus compte. Exemple :
+    "Diagnostic : PR seropositive (probabilite 0.95). Facteurs les
+     plus influents : Anti_CCP = 145 (renforce), RF = 80
+     (renforce), CRP = 12 (attenue)."
+  Puis on ecrit dans le cahier :
+    - le code-barres du modele utilise ;
+    - le code-barres de l'explication ;
+    - un faux nom pour le patient (un "pseudonyme", par exemple
+      CAS-4B406AF682), jamais son vrai nom.
+  Le texte de l'explication, lui, reste dans le coffre (offchain/).
+
+  Tricherie testee : quelqu'un change le texte de l'explication dans
+  le coffre. On recalcule son code-barres : il est different de
+  celui du cahier. FALSIFICATION DETECTEE.
+
+  Le chemin de preuve (que tu as vu a l'ecran) :
+    Diagnostic -> modele du round 10 -> ses 3 cliniques
+               -> modele du round 9  -> ses 3 cliniques
+               ... -> modele du round 0 (le point de depart)
+  C'est comme un arbre genealogique du diagnostic.
+
+
+--------------------------------------------------------------
+6. CHAQUE FICHIER ET CHAQUE CLASSE : QUI FAIT QUOI
+--------------------------------------------------------------
+
+split_cliniques.py
+  Coupe les patients en 3 paquets (3 cliniques).
+
+model.py
+  - _encode_gender : transforme Femme/Homme en 0/1.
+  - _clean : applique cette transformation.
+  - build_scaler / load_scaler : calculent (et relisent) la valeur
+    du milieu, la moyenne et l'ecart pour chaque colonne.
+  - load_dataset : lit un fichier, remplit les cases vides, met
+    tous les nombres a la meme echelle.
+  - softmax : transforme 3 scores en 3 pourcentages (somme = 100%).
+  - CLASSE SoftmaxRegression : c'est le modele (la balance a 21
+    reglages) :
+        get_weights  -> donne les 21 nombres
+        set_weights  -> met les 21 nombres
+        fit          -> apprend (corrige les reglages petit a petit)
+        predict_proba-> donne les 3 pourcentages
+        predict      -> donne la classe la plus probable
+        evaluate     -> donne la note (accuracy, F1)
+
+federation.py
+  - local_train        : une clinique apprend chez elle.
+  - aggregate_weighted : le chef fait la moyenne ponderee.
+  - run_federation     : repete 10 tours, et garde l'historique.
+
+fingerprint.py
+  - fingerprint_weights : code-barres d'une recette (21 nombres).
+  - fingerprint_text    : code-barres d'un texte (une explication).
+  - fingerprint_json    : code-barres d'un petit dossier (un bloc).
+
+ledger.py
+  - CLASSE Ledger : c'est le cahier magique :
+        append       -> ecrit une nouvelle page a la fin
+        verify_chain -> verifie que toutes les pages sont collees
+                        et que rien n'a ete change
+        find         -> cherche des pages (par type ou valeur)
+        __len__      -> compte les pages
+
+anchored_federation.py
+  - save_offchain : range une recette dans le coffre, nommee par
+    son code-barres.
+  - run_anchored  : fait les 10 tours en ecrivant dans le cahier
+    au bon moment (avant et apres le melange).
+
+diagnosis.py
+  - pseudonymize       : invente le faux nom d'un patient.
+  - prepare_case       : prepare un patient comme a l'entrainement.
+  - build_explanation  : ecrit l'explication en francais.
+  - diagnose           : diagnostic + explication + ecriture dans
+                         le cahier.
+  - verify_explanation : verifie qu'une explication n'a pas ete
+                         changee.
+  - trace              : remonte du diagnostic jusqu'au modele de
+                         depart (l'arbre genealogique).
+
+Les fichiers test_*.py ne font pas partie du projet final : ce sont
+des "controles". Chacun repond a : "est-ce que ca marche vraiment ?".
+
+
+--------------------------------------------------------------
+7. COMMENT ON TRICHE, ET COMMENT ON LE VOIT
+--------------------------------------------------------------
+
+Tricherie 1 : modifier une explication apres coup
+  -> le code-barres ne correspond plus a celui du cahier.
+     (deja teste)
+
+Tricherie 2 : utiliser un faux modele (fait hors de la federation)
+  -> son code-barres n'existe nulle part dans le cahier : le videur
+     refuse le diagnostic. (etape 10, a venir)
+
+Tricherie 3 : une clinique envoie une recette empoisonnee
+  -> son code-barres est ecrit AVANT le melange : elle ne peut pas
+     nier. Avec une moyenne "robuste" (la mediane), le chef ignore
+     cette recette, et ce rejet est ECRIT aussi dans le cahier.
+     (etape 11, a venir)
+
+Tricherie 4 : changer ou arracher une vieille page du cahier
+  -> la colle est cassee : verify_chain le signale. (deja teste)
+
+Le registre est arrete puis relance :
+  -> on relit le fichier ledger.jsonl, rien n'est perdu. (deja teste)
+
+
+--------------------------------------------------------------
+8. CE QUE LE CAHIER NE FAIT PAS (honnetete)
+--------------------------------------------------------------
+
+  - Il ne dit pas si le modele est BON. Un modele peut etre
+    certifie ET mauvais ; le cahier rend seulement sa note visible.
+  - Il n'empeche pas quelqu'un de reecrire TOUT le cahier d'un
+    coup avec tous les codes recalcules. Notre cahier est un seul
+    fichier sur un seul ordinateur. C'est pour ca qu'a l'etape 14
+    on le remplace par une vraie blockchain, copiee sur plusieurs
+    ordinateurs qui refuseraient la version reecrite.
+  - Les 3 cliniques sont simulees sur le meme ordinateur, avec des
+    patients coupes en 3 au hasard. C'est a declarer dans le rapport.
+
+
+--------------------------------------------------------------
+9. CE QU'IL RESTE A FAIRE
+--------------------------------------------------------------
+
+  Etape 10 : le videur (porte de certification)
+  Etape 11 : la moyenne robuste (mediane) pour ignorer un tricheur
+  Etape 12 : tester les 5 scenarios
+  Etape 13 : une petite interface pour tout voir
+  Etape 14 : une vraie blockchain (Hardhat + Solidity, ou Fabric)
+  Etape 15 : mesurer (temps ajoute, taille ecrite) et ecrire le
+             rapport
+
+
+--------------------------------------------------------------
+10. PETIT DICTIONNAIRE
+--------------------------------------------------------------
+
+  Clinique ........ un cuisinier avec ses propres clients
+  Patient ......... un client (reste toujours chez sa clinique)
+  Modele .......... la recette (21 nombres)
+  Poids ........... les 21 nombres de la recette
+  Round ........... un tour : s'entrainer, puis melanger
+  Federe .......... apprendre ensemble sans partager les patients
+  Hash / empreinte  le code-barres magique d'une chose
+  Registre ........ le cahier magique (blockchain)
+  Bloc ............ une page du cahier
+  Ancrer .......... ecrire un code-barres dans le cahier
+  Hors chaine ..... range dans le coffre, pas dans le cahier
+  Pseudonyme ...... un faux nom pour cacher le vrai patient
+  Porte ........... le videur qui refuse les faux modeles
+  Mediane ......... la valeur du milieu (ignore les valeurs folles)
+  Accuracy ........ le pourcentage de bonnes reponses
+  Determinisme .... meme chose au depart = meme resultat a l'arrivee
+
+==============================================================
